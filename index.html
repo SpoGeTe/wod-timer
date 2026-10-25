@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="WOD Timer">
+<meta name="theme-color" content="#0d0f12">
+<title>WOD Timer</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{
+  --bg:#0d0f12; --card:#171a20; --card2:#20242c; --line:#2b313b;
+  --text:#f2f4f7; --muted:#8b93a1; --accent:#ff6b1a; --accent2:#ff8f4d;
+  --ok:#2fd27a; --bad:#ff4d57; --rest:#3fa9ff;
+  --safe-t:env(safe-area-inset-top); --safe-b:env(safe-area-inset-bottom);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text)}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;font-size:16px;line-height:1.4;min-height:100vh}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+input,select,textarea{font:inherit;color:var(--text);background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);border-color:transparent}
+a{color:var(--accent2)}
+.num{font-variant-numeric:tabular-nums}
+#app{max-width:980px;margin:0 auto;padding:calc(var(--safe-t) + 16px) 16px calc(var(--safe-b) + 96px)}
+#app.running{padding-bottom:calc(var(--safe-b) + 24px)}
+h1{font-size:34px;line-height:1.1;margin:8px 0 4px;letter-spacing:-.02em}
+h2{font-size:22px;margin:28px 0 10px;letter-spacing:-.01em}
+h3{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:24px 0 8px;font-weight:700}
+.sub{color:var(--muted);margin:0 0 18px}
+.muted{color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px}
+.grid{display:grid;gap:12px}
+@media(min-width:700px){.grid.two{grid-template-columns:1fr 1fr}}
+.tag{display:inline-block;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:4px 9px;border-radius:999px;background:rgba(255,107,26,.15);color:var(--accent2)}
+.tag.grey{background:var(--card2);color:var(--muted)}
+.tag.ok{background:rgba(47,210,122,.15);color:var(--ok)}
+
+/* Startmenü */
+.wod{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px;position:relative;overflow:hidden}
+.wod:active{transform:scale(.99);background:var(--card2)}
+.wod::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--accent)}
+.wod-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+.wod-name{font-size:28px;font-weight:800;letter-spacing:-.02em}
+.wod-head{color:var(--accent2);font-weight:700;font-size:14px;margin-bottom:4px}
+.wod-ex{font-size:17px;line-height:1.55}
+.wod-ex b{display:inline-block;min-width:34px;font-variant-numeric:tabular-nums}
+.wod-tail{color:var(--muted);font-size:14px;margin-top:4px}
+.wod-foot{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:flex;justify-content:space-between;color:var(--muted);font-size:14px}
+.wod-foot b{color:var(--text);font-size:16px}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:14px 20px;border-radius:14px;background:var(--card2);border:1px solid var(--line);font-weight:700}
+.btn:active{filter:brightness(1.2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.big{width:100%;padding:20px;font-size:20px;border-radius:18px}
+.btn.small{padding:8px 12px;font-size:14px;border-radius:10px}
+.btn.danger{color:var(--bad)}
+.back{color:var(--accent2);font-weight:600;padding:6px 0;margin-bottom:4px;font-size:17px}
+.row{display:flex;gap:10px;align-items:center}
+.row.wrap{flex-wrap:wrap}
+.spacer{flex:1}
+.seg{display:inline-flex;background:var(--card2);border-radius:12px;padding:3px;border:1px solid var(--line)}
+.seg button{padding:9px 16px;border-radius:9px;font-weight:700;color:var(--muted)}
+.seg button.on{background:var(--accent);color:#fff}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.chip{padding:8px 14px;border-radius:999px;background:var(--card2);border:1px solid var(--line);font-weight:600;font-size:15px;color:var(--muted)}
+.chip.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+
+/* Detail */
+.plan{font-size:20px;line-height:1.7}
+.plan b{display:inline-block;min-width:44px;color:var(--accent2);font-variant-numeric:tabular-nums}
+ul.list{margin:0;padding-left:20px}
+ul.list li{margin:6px 0}
+table.lv{width:100%;border-collapse:collapse}
+table.lv td{padding:9px 0;border-bottom:1px solid var(--line)}
+table.lv td:last-child{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.toggle{display:flex;align-items:center;gap:12px;padding:12px 0}
+.toggle input{width:26px;height:26px;accent-color:var(--accent);flex:none}
+
+/* Laufendes Workout */
+.runhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.runhead .title{font-weight:800;font-size:20px}
+.iconbtn{width:44px;height:44px;border-radius:12px;background:var(--card2);border:1px solid var(--line);font-size:20px;display:flex;align-items:center;justify-content:center}
+.bigtime{font-size:clamp(76px,23vw,176px);font-weight:800;text-align:center;letter-spacing:-.04em;line-height:1;margin:10px 0 4px;font-variant-numeric:tabular-nums}
+.bigtime.urgent{color:var(--bad)}
+.bigtime.rest{color:var(--rest)}
+.biglabel{text-align:center;color:var(--muted);font-weight:600;margin-bottom:10px}
+.live{text-align:center;min-height:26px;margin:4px 0 14px;color:var(--muted);font-weight:600}
+.live.good{color:var(--ok)}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:12px 0}
+@media(min-width:700px){.stats{grid-template-columns:repeat(4,1fr)}}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px}
+.stat .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.stat .v{font-size:28px;font-weight:800;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:15px;color:var(--muted);font-weight:600}
+.exbtn{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:18px;border-radius:18px;background:var(--card);border:2px solid var(--line);font-size:22px;font-weight:700;margin-bottom:10px}
+.exbtn .n{font-size:30px;font-weight:800;min-width:58px;color:var(--accent2);font-variant-numeric:tabular-nums}
+.exbtn .ck{margin-left:auto;width:38px;height:38px;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:22px;flex:none}
+.exbtn.done{border-color:var(--ok);background:rgba(47,210,122,.08)}
+.exbtn.done .n{color:var(--ok)}
+.exbtn.done .ck{background:var(--ok);border-color:var(--ok);color:#06210f}
+.banner{border-radius:16px;padding:14px 16px;font-weight:700;text-align:center;margin:8px 0 12px}
+.banner.ok{background:rgba(47,210,122,.14);color:var(--ok)}
+.banner.rest{background:rgba(63,169,255,.12);color:var(--rest)}
+.banner.bad{background:rgba(255,77,87,.12);color:var(--bad)}
+.dots{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;margin:14px 0}
+.dot{aspect-ratio:1;border-radius:10px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.dot.ok{background:var(--ok);color:#06210f}
+.dot.miss{background:var(--bad);color:#fff}
+.dot.cur{outline:2px solid var(--text)}
+.splits{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.splits span{background:var(--card2);border-radius:10px;padding:6px 10px;font-weight:600;font-variant-numeric:tabular-nums}
+
+/* Angie */
+.active{border-color:var(--accent);border-width:2px}
+.active .exname{font-size:22px;font-weight:800}
+.remain{font-size:clamp(64px,18vw,120px);font-weight:800;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+.bar{height:10px;background:var(--card2);border-radius:99px;overflow:hidden;margin:12px 0}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.quick{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}
+.quick button{padding:20px 0;border-radius:16px;background:var(--card2);border:1px solid var(--line);font-size:24px;font-weight:800;font-variant-numeric:tabular-nums}
+.quick button:active{background:var(--accent);color:#fff}
+.writein{display:flex;gap:10px}
+.writein input{font-size:24px;font-weight:700;text-align:center}
+.writein .btn{flex:none}
+.pad{margin-top:4px}
+.padshow{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--card2);border-radius:14px;padding:10px 12px 10px 18px;margin-bottom:10px}
+.padshow span{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums}
+.padshow span.muted{font-size:18px;font-weight:600}
+.padgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.padgrid button{padding:16px 0;border-radius:14px;background:var(--card2);border:1px solid var(--line);font-size:26px;font-weight:700}
+.padgrid button:active{background:var(--line)}
+.padgrid button.go{background:var(--accent);border-color:var(--accent);color:#fff;font-size:18px;font-weight:800}
+.exrow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:14px 16px;border-radius:14px;background:var(--card);border:1px solid var(--line);margin-top:8px}
+.exrow .nm{font-weight:700;flex:1}
+.exrow .rm{font-weight:800;font-size:20px;font-variant-numeric:tabular-nums}
+.exrow .mini{width:80px;height:6px;background:var(--card2);border-radius:99px;overflow:hidden}
+.exrow .mini i{display:block;height:100%;background:var(--accent)}
+.exrow.fin{opacity:.55}
+.exrow.fin .rm{color:var(--ok)}
+
+/* Cindy */
+.roundbtn{width:100%;padding:28px 16px;border-radius:24px;background:var(--accent);color:#fff;font-size:28px;font-weight:800;margin:6px 0 4px;box-shadow:0 10px 30px rgba(255,107,26,.25)}
+.roundbtn:active{transform:scale(.98);filter:brightness(1.1)}
+.roundbtn small{display:block;font-size:16px;font-weight:600;opacity:.85;margin-top:4px}
+
+/* Countdown */
+.cd{position:fixed;inset:0;background:rgba(13,15,18,.96);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px}
+.cd-n{font-size:clamp(140px,45vw,300px);font-weight:900;line-height:1;color:var(--accent);font-variant-numeric:tabular-nums}
+.cd-t{font-size:26px;font-weight:800;text-align:center}
+
+/* Ergebnis */
+.result{text-align:center;padding:24px 16px}
+.result .score{font-size:clamp(60px,18vw,120px);font-weight:900;line-height:1;margin:12px 0;font-variant-numeric:tabular-nums}
+.form{display:grid;gap:12px}
+.form label{display:grid;gap:6px;font-weight:600;color:var(--muted);font-size:14px}
+.inl{display:grid;grid-template-columns:1fr auto 1fr auto;gap:8px;align-items:center}
+.inl span{color:var(--muted)}
+
+/* Verlauf & Bestenliste */
+.entry{display:flex;gap:12px;align-items:center;padding:14px 0;border-bottom:1px solid var(--line)}
+.entry:last-child{border-bottom:0}
+.entry .l{flex:1;min-width:0}
+.entry .t{font-weight:800}
+.entry .d{color:var(--muted);font-size:14px;overflow:hidden;text-overflow:ellipsis}
+.entry .s{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;text-align:right}
+.rank{width:36px;height:36px;border-radius:50%;background:var(--card2);display:flex;align-items:center;justify-content:center;font-weight:800;flex:none}
+.rank.r1{background:#f5c542;color:#2a2000}.rank.r2{background:#c9d1dc;color:#1a1f26}.rank.r3{background:#d48a4f;color:#2a1405}
+.empty{text-align:center;color:var(--muted);padding:30px 10px}
+svg.chart{width:100%;height:auto;display:block}
+.del{color:var(--muted);font-size:13px;padding:6px 8px}
+
+/* Tabs */
+#tabs{position:fixed;left:0;right:0;bottom:0;background:rgba(13,15,18,.92);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-top:1px solid var(--line);display:flex;justify-content:center;padding:6px 8px calc(var(--safe-b) + 6px);z-index:20}
+#tabs[hidden]{display:none}
+#tabs button{flex:1;max-width:160px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;color:var(--muted);font-size:11px;font-weight:600}
+#tabs button.on{color:var(--accent)}
+#tabs svg{width:26px;height:26px}
+#toast{position:fixed;left:50%;bottom:calc(var(--safe-b) + 100px);transform:translateX(-50%) translateY(20px);background:var(--text);color:var(--bg);padding:12px 18px;border-radius:14px;font-weight:700;opacity:0;pointer-events:none;transition:.25s;z-index:60;max-width:90vw;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<nav id="tabs">
+  <button data-act="tab" data-tab="wods"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12"/></svg>Workouts</button>
+  <button data-act="tab" data-tab="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6"/></svg>Verlauf</button>
+  <button data-act="tab" data-tab="board"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg>Bestenliste</button>
+  <button data-act="tab" data-tab="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>Einstellungen</button>
+</nav>
+<div id="toast"></div>
+<input type="file" id="impFile" accept="application/json,.json" hidden>
+
+<script>
+'use strict';
+/* ---------- Workouts ---------- */
+const EX = {
+  pull:  {rx:'Pull-ups',  sc:'Ring Rows',      de:'Klimmzüge – Kinn über die Stange'},
+  push:  {rx:'Push-ups',  sc:'Knie-Push-ups',  de:'Liegestütze – Brust berührt den Boden'},
+  sit:   {rx:'Sit-ups',   sc:'Sit-ups',        de:'Sit-ups – Schultern berühren den Boden, Hände zu den Füßen'},
+  squat: {rx:'Air Squats',sc:'Air Squats',     de:'Kniebeugen ohne Gewicht – Hüfte unter Kniehöhe'}
+};
+const WODS = [
+  {id:'angie', name:'Angie', type:'fortime', tag:'For Time',
+   ex:[['pull',100],['push',100],['sit',100],['squat',100]],
+   about:'Einer der bekanntesten Benchmark-Klassiker: 400 Wiederholungen nur mit dem eigenen Körpergewicht. Am Ende entscheidet die Ausdauer von Armen und Rumpf.',
+   rules:['So schnell wie möglich – die Uhr läuft hoch.','Erst alle 100 Wiederholungen einer Übung, dann die nächste.','Wie du die 100 aufteilst, ist dir überlassen.'],
+   tips:['Pull-ups von Anfang an in kleine Sätze teilen (z. B. 10 × 10), bevor die Arme „zu“ machen.','Bei den Push-ups bleibt der Körper gerade wie ein Brett.','Die Squats am Ende gleichmäßig durchziehen – nicht stehen bleiben.'],
+   levels:[['Einsteiger','über 30 Min'],['Fortgeschritten','20–30 Min'],['Sehr gut','12–20 Min'],['Spitze','unter 12 Min']]},
+  {id:'barbara', name:'Barbara', type:'fortime', tag:'For Time', head:'5 Runden', tail:'3 Min Pause nach jeder Runde',
+   ex:[['pull',20],['push',30],['sit',40],['squat',50]],
+   about:'Fünf harte Runden mit genau drei Minuten Pause dazwischen. Die Kunst ist, jede Runde ähnlich schnell zu schaffen.',
+   rules:['5 Runden mit je 20 Pull-ups, 30 Push-ups, 40 Sit-ups und 50 Squats.','Nach jeder Runde (außer der letzten) 3 Minuten Pause – die App startet sie automatisch.','Gewertet wird die Gesamtzeit inklusive Pausen. Zusätzlich siehst du deine reine Arbeitszeit.'],
+   tips:['Die erste Runde nicht zu schnell angehen – ab Runde 3 fühlen sich die Pausen kürzer an.','In der Pause in Bewegung bleiben und ruhig atmen, nicht hinsetzen.','Ziel: möglichst gleiche Rundenzeiten.'],
+   levels:[['Einsteiger','über 50 Min'],['Fortgeschritten','40–50 Min'],['Sehr gut','32–40 Min'],['Spitze','unter 32 Min']]},
+  {id:'chelsea', name:'Chelsea', type:'emom', tag:'EMOM 30', head:'Jede Minute · 30 Minuten',
+   ex:[['pull',5],['push',10],['squat',15]],
+   about:'Ein EMOM: Zu Beginn jeder Minute startest du eine Runde. Was von der Minute übrig bleibt, ist deine Pause. Klingt harmlos – bis Minute 20.',
+   rules:['30 Minuten lang, jede volle Minute: 5 Pull-ups, 10 Push-ups, 15 Squats.','Die Runde muss innerhalb der Minute fertig sein.','Nach strenger Regel endet das Workout bei der ersten verpassten Minute. Du kannst wählen: streng oder weitermachen (die Minute wird rot markiert).','Ergebnis: geschaffte Runden (höchstens 30).'],
+   tips:['Zügig, aber ruhig arbeiten – jede Sekunde Pause zählt später.','Push-ups werden meist zum Engpass: früh in kleine Sätze teilen.','Die Pause im Stehen nehmen und tief durchatmen.'],
+   levels:[['Einsteiger','10–15 Runden'],['Fortgeschritten','15–25 Runden'],['Sehr gut','25–29 Runden'],['Spitze','alle 30 Runden']]},
+  {id:'cindy', name:'Cindy', type:'amrap', tag:'AMRAP 20', head:'20 Min · so viele Runden wie möglich',
+   ex:[['pull',5],['push',10],['squat',15]],
+   about:'Der Klassiker unter den AMRAPs: 20 Minuten, so viele Runden wie möglich. Einfache Übungen – das Tempo entscheidet.',
+   rules:['20 Minuten: 5 Pull-ups, 10 Push-ups, 15 Squats – immer wieder von vorn.','Ergebnis: geschaffte Runden plus Wiederholungen der angefangenen letzten Runde.','Die App misst deine Zeit pro Runde und schätzt dein Endergebnis.'],
+   tips:['Eine Runde pro Minute (= 20 Runden) ist ein starkes Ziel.','Ein gleichmäßiges Tempo von Anfang an bringt mehr als ein schneller Start.','Push-ups in kleinen Sätzen, bevor sie ganz ausfallen.'],
+   levels:[['Einsteiger','8–12 Runden'],['Fortgeschritten','13–17 Runden'],['Sehr gut','18–22 Runden'],['Spitze','23+ Runden']]}
+];
+const W = Object.fromEntries(WODS.map(w => [w.id, w]));
+const exName = (k, v) => EX[k][v === 'sc' ? 'sc' : 'rx'];
+
+/* ---------- Speicher ---------- */
+function load(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } }
+function store(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+let results = load('wod.results', []);
+const settings = Object.assign({name:'', sound:true, voice:true, mute:false, variant:'rx', strict:false}, load('wod.settings', {}));
+const saveResults = () => store('wod.results', results);
+const saveSettings = () => store('wod.settings', settings);
+
+const S = {tab:'wods', view:null, boardWod:'angie', boardVar:'all', histWod:'angie', run:null};
+(function resume(){
+  const r = load('wod.run', null);
+  if(r && Date.now() - r.created < 4 * 3600e3) S.run = r; else store('wod.run', null);
+})();
+const persist = () => store('wod.run', S.run);
+
+/* ---------- Hilfen ---------- */
+const $ = s => document.querySelector(s);
+const app = $('#app'), tabs = $('#tabs');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2, '0');
+function fmt(sec){ sec = Math.max(0, Math.round(sec)); const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), s = sec%60; return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`; }
+const up = ms => fmt(Math.floor(Math.max(0, ms)/1000));
+const down = ms => fmt(Math.ceil(Math.max(0, ms)/1000));
+function todayISO(){ const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function parseISO(s){ const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+const fmtDate = s => { const [y,m,d] = s.split('-'); return `${d}.${m}.${y}`; };
+const int = v => { const n = parseInt(String(v ?? '').replace(/[^\d]/g, ''), 10); return isNaN(n) ? null : n; };
+function set(id, text, cls){ const e = document.getElementById(id); if(!e) return; if(e.textContent !== String(text)) e.textContent = text; if(cls !== undefined) e.className = cls; }
+function toast(t){ const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('show'), 2400); }
+
+/* Ergebnisse vergleichen: negativ = a ist besser */
+function cmp(a, b){
+  const t = W[a.wod].type;
+  if(t === 'fortime') return a.score - b.score;
+  if(t === 'emom') return b.score - a.score;
+  return (b.score*1000 + (b.reps||0)) - (a.score*1000 + (a.reps||0));
+}
+function scoreText(r){
+  const t = W[r.wod].type;
+  if(t === 'fortime') return fmt(r.score);
+  if(t === 'emom') return `${r.score} Runden`;
+  return r.reps ? `${r.score} + ${r.reps}` : `${r.score} Runden`;
+}
+const best = (wod, variant) => results.filter(r => r.wod === wod && (!variant || r.variant === variant)).sort((a,b) => cmp(a,b) || a.date.localeCompare(b.date))[0];
+const vLabel = v => v === 'sc' ? 'Scaled' : 'Rx';
+
+/* ---------- Ton, Sprache, Bildschirm ---------- */
+let ac = null;
+function unlockAudio(){ try{ ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if(ac.state === 'suspended') ac.resume(); }catch(e){} }
+function beep(f = 880, d = .15, v = .3){
+  if(settings.mute || !settings.sound || !ac) return;
+  try{
+    const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
+    o.type = 'sine'; o.frequency.value = f;
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.001, t + d);
+    o.connect(g).connect(ac.destination); o.start(t); o.stop(t + d + .05);
+  }catch(e){}
+}
+function say(text){
+  if(settings.mute || !settings.voice || !window.speechSynthesis) return;
+  try{ const u = new SpeechSynthesisUtterance(text); u.lang = 'de-DE'; u.rate = 1.05; speechSynthesis.speak(u); }catch(e){}
+}
+let wakeLock = null;
+async function awake(on){
+  try{
+    if(on && !wakeLock && navigator.wakeLock){ wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
+    if(!on && wakeLock){ await wakeLock.release(); wakeLock = null; }
+  }catch(e){}
+}
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible' && S.run && S.run.phase !== 'done') awake(true); });
+function countBeep(r, key, msLeft){
+  const s = Math.ceil(msLeft/1000);
+  if(s >= 1 && s <= 3 && r.cb !== key + ':' + s){ r.cb = key + ':' + s; beep(880, .12); }
+}
+
+/* ---------- Ansichten: Startmenü ---------- */
+function planLines(w, v, cls = 'wod-ex'){
+  return `${w.head ? `<div class="wod-head">${esc(w.head)}</div>` : ''}
+    <div class="${cls}">${w.ex.map(([k,n]) => `<b>${n}</b> ${esc(exName(k, v))}`).join('<br>')}</div>
+    ${w.tail ? `<div class="wod-tail">${esc(w.tail)}</div>` : ''}`;
+}
+function homeView(){
+  return `<h1>WOD Timer</h1><p class="sub">Benchmark-Workouts mit dem eigenen Körpergewicht</p>
+  <div class="grid two">${WODS.map(w => {
+    const b = best(w.id, 'rx') || best(w.id);
+    return `<button class="wod" data-act="open" data-id="${w.id}">
+      <div class="wod-top"><span class="wod-name">${w.name}</span><span class="tag">${w.tag}</span></div>
+      ${planLines(w, 'rx')}
+      <div class="wod-foot"><span>${b ? `Rekord${b.variant==='sc' ? ' (Scaled)' : ''}` : 'Noch kein Ergebnis'}</span>${b ? `<b class="num">${scoreText(b)}</b>` : '<span>›</span>'}</div>
+    </button>`;
+  }).join('')}</div>`;
+}
+
+function detailView(id){
+  const w = W[id], v = settings.variant;
+  const mine = results.filter(r => r.wod === id).sort((a,b) => b.date.localeCompare(a.date) || b.id - a.id);
+  const bRx = best(id, 'rx'), bSc = best(id, 'sc');
+  return `<button class="back" data-act="home">‹ Workouts</button>
+  <div class="row"><h1>${w.name}</h1><span class="tag">${w.tag}</span></div>
+  <p class="sub">${esc(w.about)}</p>
+  <div class="card">
+    <div class="row wrap" style="margin-bottom:12px"><span class="muted" style="font-weight:600">Variante</span><span class="spacer"></span>
+      <div class="seg"><button class="${v==='rx'?'on':''}" data-act="variant" data-v="rx">Rx</button><button class="${v==='sc'?'on':''}" data-act="variant" data-v="sc">Scaled</button></div></div>
+    ${planLines(w, v, 'plan')}
+    ${id === 'chelsea' ? `<label class="toggle"><input type="checkbox" id="setStrict" ${settings.strict?'checked':''}><span><b>Strenge Regel</b><br><span class="muted">Ende bei der ersten verpassten Minute</span></span></label>` : ''}
+    <div style="margin-top:16px"><button class="btn primary big" data-act="start">Start</button></div>
+  </div>
+  ${(bRx || bSc) ? `<div class="stats" style="grid-template-columns:1fr 1fr">
+    <div class="stat"><div class="k">Rekord Rx</div><div class="v">${bRx ? scoreText(bRx) : '–'}</div></div>
+    <div class="stat"><div class="k">Rekord Scaled</div><div class="v">${bSc ? scoreText(bSc) : '–'}</div></div></div>` : ''}
+  <div class="grid two">
+    <div><h3>Regeln</h3><ul class="list">${w.rules.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>
+    <div><h3>Tipps</h3><ul class="list">${w.tips.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>
+  </div>
+  <div class="grid two">
+    <div><h3>Die Übungen</h3><ul class="list">${w.ex.map(([k]) => `<li><b>${EX[k].rx}</b>: ${esc(EX[k].de)}${EX[k].sc !== EX[k].rx ? ` <span class="muted">(Scaled: ${EX[k].sc})</span>` : ''}</li>`).join('')}</ul></div>
+    <div><h3>Grobe Richtwerte (Rx)</h3><table class="lv">${w.levels.map(([a,b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table></div>
+  </div>
+  ${mine.length ? `<h3>Deine letzten Ergebnisse</h3><div class="card">${mine.slice(0,5).map(entryRow).join('')}</div>` : ''}
+  <p style="margin-top:24px"><a href="https://www.crossfit.com/${id}" target="_blank" rel="noopener">Mehr zu ${w.name} auf crossfit.com ↗</a></p>`;
+}
+
+/* ---------- Laufendes Workout ---------- */
+function startRun(){
+  unlockAudio();
+  const w = W[S.view.id], now = Date.now();
+  const r = {id:w.id, variant:settings.variant, created:now, phase:'countdown', startAt:now + 10000, cd:11};
+  if(w.id === 'angie'){ r.left = w.ex.map(e => e[1]); r.active = 0; r.hist = []; }
+  if(w.id === 'barbara'){ r.round = 1; r.done = [0,0,0,0]; r.splits = []; r.cum = []; r.roundStart = r.startAt; }
+  if(w.id === 'chelsea'){ r.min = 0; r.res = Array(30).fill(null); r.done = [0,0,0]; r.strict = settings.strict; }
+  if(w.id === 'cindy'){ r.times = []; r.endAt = r.startAt + 20*60e3; }
+  S.run = r; say(`${w.name}. Mach dich bereit.`); awake(true); persist(); render();
+}
+function finish(r){
+  const now = Date.now(), w = W[r.id];
+  r.phase = 'done';
+  if(w.type === 'fortime') r.score = Math.round((now - r.startAt)/1000);
+  if(r.id === 'chelsea') r.score = r.res.filter(x => x === 'ok').length;
+  if(r.id === 'cindy'){ r.score = r.times.length; r.reps = 0; }
+  awake(false); beep(1046, .7, .35); say('Geschafft! Stark gemacht.'); persist(); render();
+}
+function runHead(w, r){
+  return `<div class="runhead"><button class="iconbtn" data-act="abort" aria-label="Abbrechen">✕</button>
+    <div class="title">${w.name} <span class="tag ${r.variant==='sc'?'grey':''}">${vLabel(r.variant)}</span></div>
+    <button class="iconbtn" data-act="mute" aria-label="Ton">${settings.mute ? '🔇' : '🔊'}</button></div>`;
+}
+const recFor = r => best(r.id, r.variant);
+
+const RUN = {
+  angie: {
+    view(r, w){
+      const tot = r.left.reduce((a,b) => a+b, 0), e = w.ex[r.active], rem = r.left[r.active];
+      return `<div class="bigtime" id="tm">0:00</div>
+      <div class="biglabel">Noch <b class="num">${tot}</b> von 400 Wiederholungen</div>
+      <div class="live" id="live"></div>
+      <div class="card active">
+        <div class="row"><span class="exname">${esc(exName(e[0], r.variant))}</span><span class="spacer"></span><span class="muted">Übung ${r.active+1} von 4</span></div>
+        <div class="row" style="align-items:baseline;gap:12px;margin-top:6px"><span class="remain">${rem}</span><span class="muted">übrig von ${e[1]}</span></div>
+        <div class="bar"><i style="width:${(e[1]-rem)/e[1]*100}%"></i></div>
+        <div class="muted" style="font-weight:600">Geschafft – abziehen:</div>
+        <div class="quick">${[1,5,10,25].map(n => `<button data-act="angieAdd" data-n="${n}">−${n}</button>`).join('')}</div>
+        ${S.padOpen ? `<div class="pad">
+            <div class="padshow"><span id="padv" class="${padVal ? '' : 'muted'}">${padVal || 'Andere Zahl'}</span><button class="btn small" data-act="padClose">Schließen</button></div>
+            <div class="padgrid">${[1,2,3,4,5,6,7,8,9].map(n => `<button data-act="padKey" data-k="${n}">${n}</button>`).join('')}
+              <button data-act="padKey" data-k="del" aria-label="Löschen">⌫</button><button data-act="padKey" data-k="0">0</button><button class="go" data-act="padOk">Abziehen</button></div></div>`
+          : `<button class="btn" style="width:100%" data-act="padOpen">123 · Andere Zahl eingeben</button>`}
+      </div>
+      ${w.ex.map((x,i) => i === r.active ? '' : `<button class="exrow ${r.left[i]===0?'fin':''}" data-act="angieSel" data-i="${i}">
+        <span class="nm">${esc(exName(x[0], r.variant))}</span><span class="mini"><i style="width:${(x[1]-r.left[i])/x[1]*100}%"></i></span><span class="rm">${r.left[i]===0?'✓':r.left[i]}</span></button>`).join('')}
+      <div class="row" style="margin-top:14px"><button class="btn" data-act="angieUndo" ${r.hist.length?'':'disabled style="opacity:.4"'}>↶ Rückgängig</button></div>`;
+    },
+    paint(r, now){
+      const t = Math.max(0, now - r.startAt);
+      set('tm', up(t));
+      const rec = recFor(r), done = 400 - r.left.reduce((a,b) => a+b, 0);
+      if(rec && done > 0 && t > 15000){
+        const ahead = done * rec.score / 400 - t/1000;
+        if(ahead >= 3) return set('live', `🔥 ${fmt(ahead)} vor deinem Rekord – weiter so!`, 'live good');
+      }
+      set('live', rec ? `Rekord: ${fmt(rec.score)}` : '', 'live');
+    },
+    step(){}
+  },
+  barbara: {
+    view(r, w){
+      const rest = r.phase === 'rest';
+      return `<div class="bigtime" id="tm">0:00</div>
+      <div class="biglabel">Gesamtzeit · Runde <b>${r.round}</b> von 5</div>
+      <div class="live" id="live">${esc(r.msg || '')}</div>
+      ${rest ? `<div class="card" style="border-color:var(--rest);text-align:center">
+          <div class="muted" style="font-weight:700;letter-spacing:.08em">PAUSE</div>
+          <div class="bigtime rest" id="rest" style="font-size:clamp(64px,18vw,130px)">3:00</div>
+          <div class="muted">Danach: Runde ${r.round + 1}</div>
+          <div style="margin-top:12px"><button class="btn" data-act="skipRest">Pause beenden – weiter</button></div></div>`
+      : `<div class="stats" style="grid-template-columns:1fr 1fr"><div class="stat"><div class="k">Diese Runde</div><div class="v" id="rt">0:00</div></div>
+          <div class="stat"><div class="k">Arbeitszeit</div><div class="v" id="wt">0:00</div></div></div>
+         ${w.ex.map(([k,n],i) => `<button class="exbtn ${r.done[i]?'done':''}" data-act="barbTap" data-i="${i}"><span class="n">${n}</span>${esc(exName(k, r.variant))}<span class="ck">${r.done[i]?'✓':''}</span></button>`).join('')}`}
+      ${r.splits.length ? `<h3>Rundenzeiten</h3><div class="splits">${r.splits.map((s,i) => `<span>R${i+1} · ${fmt(s)}</span>`).join('')}</div>` : ''}`;
+    },
+    paint(r, now){
+      set('tm', up(now - r.startAt));
+      if(r.phase === 'rest') set('rest', down(r.restEnd - now));
+      else { set('rt', up(now - r.roundStart)); set('wt', fmt(r.splits.reduce((a,b) => a+b, 0) + Math.max(0, now - r.roundStart)/1000)); }
+    },
+    step(r, now){
+      if(r.phase !== 'rest') return;
+      countBeep(r, 'rest' + r.round, r.restEnd - now);
+      if(now >= r.restEnd) barbNext(r, r.restEnd);
+    }
+  },
+  chelsea: {
+    view(r, w){
+      const ok = r.res.filter(x => x === 'ok').length, cur = r.res[r.min] === 'ok';
+      return `<div class="bigtime" id="tm">1:00</div>
+      <div class="biglabel">bis zur nächsten Minute · Minute <b>${Math.min(30, r.min+1)}</b> von 30</div>
+      <div class="live" id="live"></div>
+      ${cur ? `<div class="banner ok">✓ Runde geschafft – Pause bis zur nächsten Minute</div>` : ''}
+      ${w.ex.map(([k,n],i) => `<button class="exbtn ${r.done[i]?'done':''}" data-act="chelTap" data-i="${i}"><span class="n">${n}</span>${esc(exName(k, r.variant))}<span class="ck">${r.done[i]?'✓':''}</span></button>`).join('')}
+      <div class="stats" style="grid-template-columns:1fr 1fr"><div class="stat"><div class="k">Geschafft</div><div class="v">${ok} <small>Runden</small></div></div>
+        <div class="stat"><div class="k">Gesamtzeit</div><div class="v" id="et">0:00</div></div></div>
+      <div class="dots">${r.res.map((x,i) => `<div class="dot ${x||''} ${i===r.min?'cur':''}">${i+1}</div>`).join('')}</div>
+      <button class="btn" data-act="finishNow">Jetzt beenden & speichern</button>`;
+    },
+    paint(r, now){
+      const el = Math.max(0, now - r.startAt), left = 60000 - el % 60000;
+      set('tm', down(left), 'bigtime' + (left < 10000 && r.res[r.min] !== 'ok' ? ' urgent' : ''));
+      set('et', up(el));
+      const ok = r.res.filter(x => x === 'ok').length, rec = recFor(r);
+      if(rec && ok > rec.score) set('live', `🔥 Neuer Rekord! Schon ${ok} Runden`, 'live good');
+      else if(rec && !r.res.includes('miss') && r.min >= 5) set('live', `🔥 Noch fehlerfrei – Rekord: ${rec.score} Runden`, 'live good');
+      else set('live', rec ? `Rekord: ${rec.score} Runden` : '', 'live');
+    },
+    step(r, now){
+      const el = now - r.startAt, m = Math.floor(el / 60000);
+      countBeep(r, 'm' + r.min, 60000 - el % 60000);
+      if(m <= r.min) return;
+      while(r.min < m){
+        if(r.res[r.min] !== 'ok'){ r.res[r.min] = 'miss'; if(r.strict) return finish(r); }
+        r.min++; r.done = [0,0,0];
+        if(r.min >= 30) return finish(r);
+      }
+      beep(1046, .35, .35); say(`Minute ${r.min + 1}`); persist(); render();
+    }
+  },
+  cindy: {
+    view(r, w){
+      const n = r.times.length;
+      return `<div class="bigtime" id="tm">20:00</div>
+      <div class="biglabel">Restzeit</div>
+      <div class="live" id="live"></div>
+      <button class="roundbtn" data-act="cindyRound">＋ Runde geschafft<small>${w.ex.map(([k,c]) => `${c} ${esc(exName(k, r.variant))}`).join(' · ')}</small></button>
+      <div class="stats">
+        <div class="stat"><div class="k">Runden</div><div class="v">${n}</div></div>
+        <div class="stat"><div class="k">Ø pro Runde</div><div class="v" id="avg">–</div></div>
+        <div class="stat"><div class="k">Prognose</div><div class="v" id="prog">–</div></div>
+        <div class="stat"><div class="k">Aktuelle Runde</div><div class="v" id="cur">0:00</div></div>
+      </div>
+      ${n ? `<div class="splits">${r.times.map((t,i) => `<span>R${i+1} · ${up(t - (i ? r.times[i-1] : r.startAt))}</span>`).join('')}</div>` : ''}
+      <div class="row wrap" style="margin-top:10px"><button class="btn" data-act="cindyUndo" ${n?'':'disabled style="opacity:.4"'}>↶ Rückgängig</button><span class="spacer"></span><button class="btn" data-act="finishNow">Jetzt beenden</button></div>`;
+    },
+    paint(r, now){
+      const left = r.endAt - now, n = r.times.length, last = n ? r.times[n-1] : r.startAt;
+      set('tm', down(r.phase === 'countdown' ? 20*60e3 : left), 'bigtime' + (left < 60000 ? ' urgent' : ''));
+      set('cur', up(now - last));
+      const rec = recFor(r);
+      if(!n){ set('live', rec ? `Rekord: ${scoreText(rec)}` : '', 'live'); return; }
+      const avg = (last - r.startAt) / n, total = n + Math.max(0, r.endAt - last) / avg;
+      const totReps = Math.round(total * 30), pr = Math.floor(totReps / 30), prReps = totReps % 30;
+      set('avg', up(avg)); set('prog', `≈ ${pr}${prReps ? ' + ' + prReps : ''}`);
+      if(rec && n >= 2 && pr*1000 + prReps > rec.score*1000 + (rec.reps||0)) set('live', `🔥 Auf Kurs für neuen Rekord (bisher ${scoreText(rec)})`, 'live good');
+      else set('live', rec ? `Rekord: ${scoreText(rec)}` : '', 'live');
+    },
+    step(r, now){
+      const left = r.endAt - now;
+      if(left <= 10*60e3 && !r.half){ r.half = 1; say('Halbzeit!'); }
+      if(left <= 60e3 && !r.last){ r.last = 1; say('Noch eine Minute. Alles geben!'); }
+      countBeep(r, 'end', left);
+      if(left <= 0) finish(r);
+    }
+  }
+};
+
+function barbNext(r, at){
+  r.round++; r.done = [0,0,0,0]; r.roundStart = at; r.phase = 'work';
+  beep(1046, .4, .35); say(`Runde ${r.round}. Los!`); persist(); render();
+}
+
+function runView(){
+  const r = S.run, w = W[r.id];
+  if(r.phase === 'done') return doneView(r, w);
+  return runHead(w, r) + RUN[r.id].view(r, w) +
+    (r.phase === 'countdown' ? `<div class="cd"><div class="cd-n" id="cdn">10</div><div class="cd-t" id="cdt">Mach dich bereit</div><div class="muted">${w.name}</div><button class="btn" style="margin-top:20px" data-act="abort">Abbrechen</button></div>` : '');
+}
+
+function tick(){
+  const r = S.run; if(!r || r.phase === 'done') return;
+  const now = Date.now();
+  if(r.phase === 'countdown'){
+    const left = Math.ceil((r.startAt - now) / 1000);
+    if(left <= 0){ r.phase = 'work'; beep(1046, .5, .4); say('Los!'); persist(); render(); return; }
+    if(left !== r.cd){
+      r.cd = left; set('cdn', left);
+      if(left === 3){ set('cdt', 'Gib dein Bestes!'); say('Gib dein Bestes!'); }
+      beep(left <= 3 ? 880 : 660, .12, left <= 3 ? .35 : .2);
+    }
+    return;
+  }
+  RUN[r.id].step(r, now);
+  if(S.run && S.run.phase !== 'done') RUN[r.id].paint(r, Date.now());
+}
+setInterval(tick, 200);
+
+/* ---------- Ergebnis ---------- */
+function doneView(r, w){
+  const res = {wod:r.id, score:r.score, reps:r.reps||0, variant:r.variant};
+  const rec = recFor(r), isRec = !rec || cmp(res, rec) < 0;
+  let extra = '';
+  if(r.id === 'barbara') extra = `<div class="splits" style="justify-content:center">${r.splits.map((s,i) => `<span>R${i+1} · ${fmt(s)}</span>`).join('')}</div>
+    <div class="muted">Arbeitszeit ${fmt(r.splits.reduce((a,b) => a+b, 0))} · Pausen ${fmt(r.score - r.splits.reduce((a,b) => a+b, 0))}</div>`;
+  if(r.id === 'chelsea') extra = `<div class="muted">von 30 Runden</div><div class="dots">${r.res.map((x,i) => `<div class="dot ${x||''}">${i+1}</div>`).join('')}</div>`;
+  if(r.id === 'cindy') extra = `<div class="card" style="text-align:left;margin-top:12px"><b>Angefangene letzte Runde?</b><div class="muted" style="margin-bottom:10px">Wie viele Wiederholungen hast du noch geschafft?</div>
+    <div class="chips">${[[0,'Keine'],[5,'5 · Pull-ups fertig'],[15,'15 · + Push-ups fertig']].map(([n,l]) => `<button class="chip ${r.reps===n?'on':''}" data-act="cindyExtra" data-n="${n}">${l}</button>`).join('')}</div>
+    <form class="writein" data-form="cindyExtra"><input id="cxIn" type="text" inputmode="numeric" placeholder="andere Zahl (0–29)"><button class="btn" type="submit">Übernehmen</button></form></div>`;
+  return `<div class="result">
+    <div style="font-size:44px">${isRec ? '🏆' : '💪'}</div>
+    <h1>${isRec ? (rec ? 'Neuer Rekord!' : 'Erstes Ergebnis!') : 'Geschafft!'}</h1>
+    <div class="muted">${w.name} · ${vLabel(r.variant)}</div>
+    <div class="score">${scoreText(res)}</div>
+    ${rec && !isRec ? `<div class="muted">Dein Rekord: ${scoreText(rec)}</div>` : ''}
+    ${extra}
+  </div>
+  <div class="card form">
+    <label>Name<input id="dName" value="${esc(settings.name)}" placeholder="Dein Name"></label>
+    <label>Datum<input id="dDate" type="date" value="${todayISO()}" max="${todayISO()}"></label>
+    <label>Notiz (optional)<input id="dNote" placeholder="z. B. müde, gut geschlafen, neue Technik …"></label>
+    <button class="btn primary big" data-act="saveRun">Speichern</button>
+    <button class="btn danger" data-act="discard">Nicht speichern</button>
+  </div>`;
+}
+function addResult(o){
+  results.push(Object.assign({id:Date.now() + Math.floor(Math.random()*1000)}, o));
+  saveResults();
+}
+
+/* ---------- Verlauf ---------- */
+function entryRow(r, showDel){
+  const b = best(r.wod, r.variant), isBest = b && b.id === r.id;
+  return `<div class="entry"><div class="l">
+      <div class="t">${W[r.wod].name} <span class="tag ${r.variant==='sc'?'grey':''}">${vLabel(r.variant)}</span> ${isBest ? '<span class="tag ok">Rekord</span>' : ''}</div>
+      <div class="d">${fmtDate(r.date)}${r.name ? ' · ' + esc(r.name) : ''}${r.note ? ' · ' + esc(r.note) : ''}</div></div>
+    <div class="s">${scoreText(r)}</div>
+    ${showDel ? `<button class="del" data-act="del" data-id="${r.id}" aria-label="Löschen">✕</button>` : ''}</div>`;
+}
+function weekStart(d){ const x = new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate() - (x.getDay()+6)%7); return x.getTime(); }
+function logStats(){
+  const now = new Date(), month = todayISO().slice(0,7);
+  const weeks = new Set(results.map(r => weekStart(parseISO(r.date))));
+  let w = weekStart(now), streak = 0;
+  if(!weeks.has(w)) w -= 7*864e5;
+  while(weeks.has(w)){ streak++; w = weekStart(new Date(w - 3*864e5)); }
+  const counts = {}; results.forEach(r => counts[r.wod] = (counts[r.wod]||0) + 1);
+  const fav = Object.entries(counts).sort((a,b) => b[1]-a[1])[0];
+  return {total:results.length, month:results.filter(r => r.date.startsWith(month)).length, streak, fav:fav ? W[fav[0]].name : '–'};
+}
+function weekBars(){
+  const n = 12, cur = weekStart(new Date()), cols = [];
+  for(let i = n-1; i >= 0; i--) cols.push(weekStart(new Date(cur - i*7*864e5 + 864e5)));
+  const c = cols.map(ws => results.filter(r => weekStart(parseISO(r.date)) === ws).length);
+  const mx = Math.max(3, ...c), Wd = 320, H = 96, bw = Wd/n;
+  return `<svg class="chart" viewBox="0 -16 ${Wd} ${H+34}">
+    ${c.map((v,i) => { const h = v ? Math.max(6, v/mx*H) : 3; return `<rect x="${i*bw+4}" y="${H-h}" width="${bw-8}" height="${h}" rx="4" fill="${v ? 'var(--accent)' : 'var(--card2)'}" opacity="${i===n-1?1:.8}"/>${v ? `<text x="${i*bw+bw/2}" y="${H-h-5}" font-size="11" text-anchor="middle" fill="var(--text)" font-weight="700">${v}</text>` : ''}`; }).join('')}
+    <text x="4" y="${H+15}" font-size="11" fill="var(--muted)">vor 12 Wochen</text>
+    <text x="${Wd-4}" y="${H+15}" font-size="11" text-anchor="end" fill="var(--muted)">diese Woche</text></svg>`;
+}
+function progressChart(id){
+  const w = W[id], list = results.filter(r => r.wod === id).sort((a,b) => a.date.localeCompare(b.date) || a.id - b.id);
+  if(list.length < 2) return `<div class="empty">${list.length ? 'Noch ein Ergebnis mehr' : 'Ab zwei Ergebnissen'}, dann siehst du hier deine Kurve für ${w.name}.</div>`;
+  const val = r => w.type === 'amrap' ? r.score + (r.reps||0)/30 : r.score;
+  const vs = list.map(val), mn = Math.min(...vs), mx = Math.max(...vs), span = (mx - mn) || 1;
+  const Wd = 320, H = 160, px = 22, py = 26, n = list.length;
+  const X = i => px + i*(Wd - 2*px)/(n-1);
+  const Y = v => w.type === 'fortime' ? py + (v - mn)/span*(H - 2*py) : H - py - (v - mn)/span*(H - 2*py);
+  const pts = list.map((r,i) => [X(i), Y(vs[i])]);
+  const bi = vs.indexOf(w.type === 'fortime' ? mn : mx);
+  const lab = (i, anchor) => `<text x="${pts[i][0]}" y="${pts[i][1]-10}" font-size="12" font-weight="800" text-anchor="${anchor}" fill="${i===bi?'var(--ok)':'var(--text)'}">${scoreText(list[i])}</text>`;
+  return `<svg class="chart" viewBox="0 0 ${Wd} ${H+16}">
+    <line x1="${px}" x2="${Wd-px}" y1="${H-py+8}" y2="${H-py+8}" stroke="var(--line)"/>
+    <polyline points="${pts.map(p => p.join(',')).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+    ${pts.map((p,i) => `<circle cx="${p[0]}" cy="${p[1]}" r="${i===bi?6:4.5}" fill="${i===bi?'var(--ok)':list[i].variant==='sc'?'var(--muted)':'var(--accent)'}" stroke="var(--bg)" stroke-width="2"/>`).join('')}
+    ${lab(bi, bi === 0 ? 'start' : bi === n-1 ? 'end' : 'middle')}
+    ${bi !== n-1 ? lab(n-1, 'end') : ''}
+    <text x="${px}" y="${H+12}" font-size="11" fill="var(--muted)">${fmtDate(list[0].date)}</text>
+    <text x="${Wd-px}" y="${H+12}" font-size="11" text-anchor="end" fill="var(--muted)">${fmtDate(list[n-1].date)}</text></svg>
+    <div class="muted" style="font-size:13px;text-align:center">${w.type === 'fortime' ? 'Höher = schneller' : 'Höher = mehr Runden'} · <span style="color:var(--ok)">●</span> Rekord · <span style="color:var(--muted)">●</span> Scaled</div>`;
+}
+function logView(){
+  const st = logStats(), list = [...results].sort((a,b) => b.date.localeCompare(a.date) || b.id - a.id);
+  return `<div class="row"><h1>Verlauf</h1><span class="spacer"></span><button class="btn primary small" data-act="addView">＋ Nachtragen</button></div>
+  <div class="stats">
+    <div class="stat"><div class="k">Workouts</div><div class="v">${st.total}</div></div>
+    <div class="stat"><div class="k">Diesen Monat</div><div class="v">${st.month}</div></div>
+    <div class="stat"><div class="k">Wochen in Folge</div><div class="v">${st.streak} ${st.streak >= 2 ? '🔥' : ''}</div></div>
+    <div class="stat"><div class="k">Lieblings-WOD</div><div class="v" style="font-size:22px;padding-top:4px">${st.fav}</div></div>
+  </div>
+  <div class="grid two">
+    <div class="card"><h3 style="margin-top:0">Training pro Woche</h3>${weekBars()}</div>
+    <div class="card"><h3 style="margin-top:0">Deine Entwicklung</h3>
+      <div class="chips">${WODS.map(w => `<button class="chip ${S.histWod===w.id?'on':''}" data-act="histWod" data-id="${w.id}">${w.name}</button>`).join('')}</div>
+      ${progressChart(S.histWod)}</div>
+  </div>
+  <h3>Alle Ergebnisse</h3>
+  ${list.length ? `<div class="card">${list.map(r => entryRow(r, true)).join('')}</div>` : `<div class="card empty">Noch keine Ergebnisse.<br>Starte ein Workout oder trage ein früheres nach.</div>`}`;
+}
+function addView(){
+  return `<button class="back" data-act="tab" data-tab="log">‹ Verlauf</button><h1>Ergebnis nachtragen</h1><p class="sub">Für Workouts, die du schon früher gemacht hast.</p>
+  <div class="card form">
+    <label>Workout<select id="aWod">${WODS.map(w => `<option value="${w.id}">${w.name} (${w.tag})</option>`).join('')}</select></label>
+    <label>Datum<input id="aDate" type="date" value="${todayISO()}" max="${todayISO()}"></label>
+    <label>Variante<select id="aVar"><option value="rx">Rx</option><option value="sc" ${settings.variant==='sc'?'selected':''}>Scaled</option></select></label>
+    <label data-t="fortime">Zeit<div class="inl"><input id="aMin" type="text" inputmode="numeric" placeholder="Min"><span>Min</span><input id="aSec" type="text" inputmode="numeric" placeholder="Sek"><span>Sek</span></div></label>
+    <label data-t="emom" hidden>Geschaffte Runden (0–30)<input id="aRe" type="text" inputmode="numeric" placeholder="z. B. 24"></label>
+    <label data-t="amrap" hidden>Ergebnis<div class="inl"><input id="aRa" type="text" inputmode="numeric" placeholder="Runden"><span>Runden +</span><input id="aReps" type="text" inputmode="numeric" placeholder="0"><span>Wdh.</span></div></label>
+    <label>Name<input id="aName" value="${esc(settings.name)}" placeholder="Dein Name"></label>
+    <label>Notiz (optional)<input id="aNote"></label>
+    <button class="btn primary big" data-act="saveAdd">Speichern</button>
+  </div>`;
+}
+
+/* ---------- Bestenliste ---------- */
+function boardView(){
+  const w = W[S.boardWod];
+  let list = results.filter(r => r.wod === w.id && (S.boardVar === 'all' || r.variant === S.boardVar));
+  list.sort((a,b) => (S.boardVar === 'all' ? (a.variant === 'sc') - (b.variant === 'sc') : 0) || cmp(a,b) || a.date.localeCompare(b.date));
+  return `<h1>Bestenliste</h1><p class="sub">Die besten Ergebnisse je Workout. Rx steht vor Scaled.</p>
+  <div class="chips">${WODS.map(x => `<button class="chip ${S.boardWod===x.id?'on':''}" data-act="boardWod" data-id="${x.id}">${x.name}</button>`).join('')}</div>
+  <div class="seg" style="margin-bottom:14px">${[['all','Alle'],['rx','Rx'],['sc','Scaled']].map(([k,l]) => `<button class="${S.boardVar===k?'on':''}" data-act="boardVar" data-v="${k}">${l}</button>`).join('')}</div>
+  ${list.length ? `<div class="card">${list.slice(0,20).map((r,i) => `<div class="entry"><div class="rank ${i<3?'r'+(i+1):''}">${i+1}</div>
+      <div class="l"><div class="t">${esc(r.name || 'Ohne Name')} <span class="tag ${r.variant==='sc'?'grey':''}">${vLabel(r.variant)}</span></div><div class="d">${fmtDate(r.date)}${r.note ? ' · ' + esc(r.note) : ''}</div></div>
+      <div class="s">${scoreText(r)}</div></div>`).join('')}</div>`
+    : `<div class="card empty">Noch keine Ergebnisse für ${w.name}.</div>`}`;
+}
+
+/* ---------- Einstellungen ---------- */
+function moreView(){
+  return `<h1>Einstellungen</h1><p class="sub">Alles wird nur auf diesem Gerät gespeichert.</p>
+  <div class="card form">
+    <label>Dein Name (für die Bestenliste)<input id="setName" value="${esc(settings.name)}" placeholder="Name"></label>
+    <label class="toggle"><input type="checkbox" id="setSound" ${settings.sound?'checked':''}><span><b>Töne</b><br><span class="muted">Piepen beim Countdown und bei Wechseln</span></span></label>
+    <label class="toggle"><input type="checkbox" id="setVoice" ${settings.voice?'checked':''}><span><b>Ansagen</b><br><span class="muted">Sprachansagen wie „Gib dein Bestes!“</span></span></label>
+    <div class="muted" style="font-size:14px">Tipp: Ist der Stummschalter am iPhone an, sind die Töne aus.</div>
+  </div>
+  <h3>Daten sichern</h3>
+  <div class="card">
+    <p style="margin-top:0">${results.length} Ergebnisse gespeichert. Mit „Sichern“ bekommst du eine Datei, die du z. B. in iCloud Drive ablegst. Mit „Laden“ holst du sie auf ein anderes Gerät.</p>
+    <div class="row wrap"><button class="btn" data-act="export">⬆︎ Sichern</button><button class="btn" data-act="import">⬇︎ Laden</button></div>
+  </div>
+  <p class="muted" style="font-size:13px;margin-top:24px">WOD Timer · Version 1.0</p>`;
+}
+
+/* ---------- Rendern ---------- */
+function render(){
+  const running = !!S.run;
+  app.classList.toggle('running', running);
+  tabs.hidden = running;
+  if(running){ app.innerHTML = runView(); const r = S.run; if(r.phase !== 'done') RUN[r.id].paint(r, Date.now()); return; }
+  tabs.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.tab === S.tab));
+  const v = S.view;
+  app.innerHTML = v && v.type === 'detail' ? detailView(v.id) : v && v.type === 'add' ? addView()
+    : ({wods:homeView, log:logView, board:boardView, more:moreView})[S.tab]();
+}
+const go = fn => { fn(); render(); window.scrollTo(0, 0); };
+
+/* ---------- Aktionen ---------- */
+const ACT = {
+  tab: d => go(() => { S.tab = d.tab; S.view = null; }),
+  home: () => go(() => { S.view = null; }),
+  open: d => go(() => { S.view = {type:'detail', id:d.id}; }),
+  variant: d => { settings.variant = d.v; saveSettings(); render(); },
+  start: () => startRun(),
+  mute: () => { settings.mute = !settings.mute; saveSettings(); render(); if(!settings.mute){ unlockAudio(); beep(); } },
+  abort: () => { if(!confirm('Workout abbrechen? Der Fortschritt geht verloren.')) return; S.run = null; persist(); awake(false); render(); },
+  finishNow: () => { if(confirm('Workout jetzt beenden und Ergebnis speichern?')) finish(S.run); },
+  angieAdd: d => angieSub(+d.n),
+  angieSel: d => { S.run.active = +d.i; persist(); render(); },
+  angieUndo: () => { const r = S.run, h = r.hist.pop(); if(!h) return; r.left[h[0]] += h[1]; r.active = h[0]; persist(); render(); },
+  barbTap: d => {
+    const r = S.run; if(r.phase !== 'work') return;
+    r.done[d.i] = r.done[d.i] ? 0 : 1;
+    if(r.done.every(Boolean)){
+      const now = Date.now(), k = r.round - 1;
+      r.splits.push(Math.round((now - r.roundStart)/1000)); r.cum.push(Math.round((now - r.startAt)/1000));
+      const rec = recFor(r), rc = rec && rec.extra && rec.extra.cum && rec.extra.cum[k];
+      r.msg = rc ? (rc > r.cum[k] ? `🔥 Runde ${r.round}: ${fmt(rc - r.cum[k])} schneller als beim Rekord` : `Rekord nach Runde ${r.round}: ${fmt(rc)}`) : '';
+      if(r.round === 5) return finish(r);
+      r.phase = 'rest'; r.restEnd = now + 180e3;
+      beep(1046, .3); say(`Runde ${r.round} geschafft. Drei Minuten Pause.`);
+    } else beep(740, .08, .2);
+    persist(); render();
+    if(r.msg) set('live', r.msg, 'live' + (r.msg.startsWith('🔥') ? ' good' : ''));
+  },
+  skipRest: () => barbNext(S.run, Date.now()),
+  chelTap: d => {
+    const r = S.run; if(r.phase !== 'work') return;
+    r.done[d.i] = r.done[d.i] ? 0 : 1;
+    const was = r.res[r.min] === 'ok';
+    r.res[r.min] = r.done.every(Boolean) ? 'ok' : null;
+    if(!was && r.res[r.min] === 'ok'){ beep(1046, .25); say('Geschafft!'); } else beep(740, .08, .2);
+    persist(); render();
+  },
+  cindyRound: () => {
+    const r = S.run; if(r.phase !== 'work') return;
+    r.times.push(Date.now()); beep(1046, .2); say(`Runde ${r.times.length}`); persist(); render();
+  },
+  cindyUndo: () => { S.run.times.pop(); persist(); render(); },
+  cindyExtra: d => { S.run.reps = Math.min(29, +d.n); persist(); render(); },
+  saveRun: () => {
+    const r = S.run, name = $('#dName').value.trim();
+    const o = {wod:r.id, date:$('#dDate').value || todayISO(), score:r.score, reps:r.reps||0, variant:r.variant, name, note:$('#dNote').value.trim()};
+    if(r.id === 'barbara') o.extra = {splits:r.splits, cum:r.cum, work:r.splits.reduce((a,b) => a+b, 0)};
+    if(r.id === 'cindy') o.extra = {rounds:r.times.map((t,i) => Math.round((t - (i ? r.times[i-1] : r.startAt))/1000))};
+    if(r.id === 'chelsea') o.extra = {res:r.res};
+    const rec = recFor(r), isRec = !rec || cmp(o, rec) < 0;
+    addResult(o); settings.name = name; saveSettings();
+    S.run = null; persist();
+    go(() => { S.tab = 'wods'; S.view = {type:'detail', id:o.wod}; });
+    toast(isRec ? '🏆 Neuer Rekord gespeichert!' : 'Gespeichert ✓');
+  },
+  discard: () => { if(!confirm('Ergebnis wirklich verwerfen?')) return; S.run = null; persist(); go(() => {}); },
+  histWod: d => { S.histWod = d.id; render(); },
+  boardWod: d => { S.boardWod = d.id; render(); },
+  boardVar: d => { S.boardVar = d.v; render(); },
+  addView: () => go(() => { S.view = {type:'add'}; }),
+  saveAdd: () => {
+    const wod = $('#aWod').value, t = W[wod].type, o = {wod, date:$('#aDate').value || todayISO(), variant:$('#aVar').value, name:$('#aName').value.trim(), note:$('#aNote').value.trim(), reps:0};
+    if(t === 'fortime'){ const m = int($('#aMin').value) || 0, s = int($('#aSec').value) || 0; o.score = m*60 + s; if(!o.score || s > 59) return toast('Bitte eine gültige Zeit eingeben'); }
+    if(t === 'emom'){ o.score = int($('#aRe').value); if(o.score === null || o.score > 30) return toast('Bitte 0 bis 30 Runden eingeben'); }
+    if(t === 'amrap'){ o.score = int($('#aRa').value); o.reps = int($('#aReps').value) || 0; if(o.score === null || o.reps > 29) return toast('Bitte Runden (und 0–29 Wdh.) eingeben'); }
+    addResult(o); if(o.name){ settings.name = o.name; saveSettings(); }
+    go(() => { S.tab = 'log'; S.view = null; }); toast('Nachgetragen ✓');
+  },
+  del: d => { if(!confirm('Dieses Ergebnis löschen?')) return; results = results.filter(r => r.id !== +d.id); saveResults(); render(); },
+  export: async () => {
+    const data = JSON.stringify({app:'wod-timer', version:1, exported:new Date().toISOString(), results}, null, 1);
+    const fname = `wod-ergebnisse-${todayISO()}.json`, file = new File([data], fname, {type:'application/json'});
+    try{ if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:'WOD Timer Ergebnisse'}); return; } }
+    catch(e){ if(e.name === 'AbortError') return; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = fname; document.body.appendChild(a); a.click(); a.remove();
+  },
+  import: () => $('#impFile').click(),
+  padOpen: () => { S.padOpen = true; padVal = ''; render(); },
+  padClose: () => { S.padOpen = false; padVal = ''; render(); },
+  padKey: d => {
+    padVal = d.k === 'del' ? padVal.slice(0, -1) : (padVal + d.k).replace(/^0+/, '').slice(0, 3);
+    set('padv', padVal || 'Andere Zahl', padVal ? '' : 'muted');
+  },
+  padOk: () => { const n = int(padVal); padVal = ''; if(n) angieSub(n); else toast('Bitte zuerst eine Zahl tippen'); }
+};
+let padVal = '';
+
+function angieSub(n){
+  const r = S.run; if(!r || r.phase !== 'work' || !n) return;
+  n = Math.min(n, r.left[r.active]); if(n <= 0) return;
+  r.left[r.active] -= n; r.hist.push([r.active, n]);
+  if(r.left[r.active] === 0){
+    const nx = r.left.findIndex(x => x > 0);
+    if(nx < 0) return finish(r);
+    const w = W.angie, from = exName(w.ex[r.active][0], r.variant), to = exName(w.ex[nx][0], r.variant);
+    r.active = nx; beep(1046, .3); say(`${from} fertig. Weiter mit ${to}.`);
+  } else beep(740, .06, .2);
+  persist(); render();
+}
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if(!el || el.disabled) return;
+  const f = ACT[el.dataset.act]; if(f) f(el.dataset, el);
+});
+document.addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target.dataset.form;
+  if(f === 'cindyExtra'){ const n = int($('#cxIn').value); if(n === null || n > 29) return toast('Bitte 0 bis 29 eingeben'); S.run.reps = n; persist(); render(); }
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if(t.id === 'setName'){ settings.name = t.value.trim(); saveSettings(); }
+  if(t.id === 'setSound'){ settings.sound = t.checked; saveSettings(); if(t.checked){ unlockAudio(); beep(); } }
+  if(t.id === 'setVoice'){ settings.voice = t.checked; saveSettings(); if(t.checked) say('Ansagen sind an.'); }
+  if(t.id === 'setStrict'){ settings.strict = t.checked; saveSettings(); }
+  if(t.id === 'aWod'){ const ty = W[t.value].type; document.querySelectorAll('[data-t]').forEach(x => x.hidden = x.dataset.t !== ty); }
+  if(t.id === 'impFile' && t.files[0]){
+    t.files[0].text().then(txt => {
+      const data = JSON.parse(txt), list = Array.isArray(data) ? data : data.results;
+      if(!Array.isArray(list)) throw 0;
+      const ids = new Set(results.map(r => r.id)); let n = 0;
+      list.forEach(r => { if(r && W[r.wod] && typeof r.score === 'number' && r.date && !ids.has(r.id)){ results.push(r); n++; } });
+      saveResults(); render(); toast(`${n} Ergebnisse geladen`);
+    }).catch(() => toast('Diese Datei konnte nicht gelesen werden')).finally(() => { t.value = ''; });
+  }
+});
+
+render();
+if(S.run && S.run.phase !== 'done') awake(true);
+if('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
