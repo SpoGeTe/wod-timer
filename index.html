@@ -239,7 +239,7 @@ const exName = (k, v) => EX[k][v === 'sc' ? 'sc' : 'rx'];
 function load(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } }
 function store(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 let results = load('wod.results', []);
-const settings = Object.assign({name:'', sound:true, voice:true, mute:false, variant:'rx', strict:false}, load('wod.settings', {}));
+const settings = Object.assign({name:'', sound:true, voice:true, mute:false, variant:'rx', strict:false, coach:false, voiceName:''}, load('wod.settings', {}));
 const saveResults = () => store('wod.results', results);
 const saveSettings = () => store('wod.settings', settings);
 
@@ -293,10 +293,65 @@ function beep(f = 880, d = .15, v = .3){
     o.connect(g).connect(ac.destination); o.start(t); o.stop(t + d + .05);
   }catch(e){}
 }
+/* Stimmen: Im Coach-Modus wird automatisch eine deutsche Frauenstimme gesucht */
+let voices = [];
+function loadVoices(){ try{ voices = speechSynthesis.getVoices().filter(v => /^de/i.test(v.lang)); }catch(e){} }
+if(window.speechSynthesis){
+  loadVoices();
+  speechSynthesis.onvoiceschanged = () => { loadVoices(); if(!S.run && !S.view && S.tab === 'more') render(); };
+}
+const FEMALE = /anna|helena|petra|marlene|vicki|katja|sandy|shelley|\bflo\b|grandma/i;
+function pickVoice(){
+  if(settings.voiceName) return voices.find(v => v.name === settings.voiceName);
+  if(settings.coach) return voices.find(v => FEMALE.test(v.name) && !/eloquence/i.test(v.voiceURI)) || voices.find(v => FEMALE.test(v.name));
+}
 function say(text){
   if(settings.mute || !settings.voice || !window.speechSynthesis) return;
-  try{ const u = new SpeechSynthesisUtterance(text); u.lang = 'de-DE'; u.rate = 1.05; speechSynthesis.speak(u); }catch(e){}
+  try{
+    const u = new SpeechSynthesisUtterance(text), v = pickVoice();
+    if(v) u.voice = v;
+    u.lang = v ? v.lang : 'de-DE';
+    u.rate = settings.coach ? 1 : 1.05; u.pitch = settings.coach ? .85 : 1;
+    speechSynthesis.speak(u);
+  }catch(e){}
 }
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const NORMAL = {
+  ready: n => `${n}. Mach dich bereit.`,
+  three: () => 'Gib dein Bestes!',
+  go: () => 'Los!',
+  next: (a, b) => `${a} fertig. Weiter mit ${b}.`,
+  angieHalf: () => 'Die Hälfte ist geschafft!',
+  roundDone: n => `Runde ${n} geschafft. Drei Minuten Pause.`,
+  restEnd: () => 'Noch zehn Sekunden Pause.',
+  roundGo: n => `Runde ${n}. Los!`,
+  minute: n => `Minute ${n}`,
+  emomOk: () => 'Geschafft!',
+  round: n => `Runde ${n}`,
+  half: () => 'Halbzeit!',
+  lastMin: () => 'Noch eine Minute. Alles geben!',
+  record: () => 'Du bist auf Rekordkurs!',
+  done: () => 'Geschafft! Stark gemacht.'
+};
+const COACH = {
+  ready: n => pick([`${n}. Aufstellen. Keine Ausreden heute.`, `${n}. Hör auf zu trödeln und mach dich bereit.`, `${n}. Heute wird gelitten.`]),
+  three: () => 'Gib dein Bestes! Und ich meine dein Bestes!',
+  go: () => pick(['Arbeite!', 'Los, beweg deinen Hintern!', 'Los geht’s. Leiden!']),
+  next: (a, b) => pick([`${a} erledigt. Jetzt ${b}, und zwar zackig!`, `${a} abgehakt. Weiter mit ${b}. Kein Rumstehen!`]),
+  angieHalf: () => pick(['Halbzeit. Die leichte Hälfte ist vorbei.', 'Zweihundert geschafft. Jammern kannst du nachher.']),
+  roundDone: n => pick([`Runde ${n} erledigt. Drei Minuten Pause. Genieß sie, es wird nicht besser.`, `Runde ${n} geschafft. Pause. Wehe, du setzt dich hin.`]),
+  restEnd: () => pick(['Zehn Sekunden. Aufstehen, Prinzessin!', 'Zehn Sekunden. Gewöhn dich bloß nicht an die Pause.']),
+  roundGo: n => pick([`Runde ${n}. Hoch mit dir!`, `Runde ${n}. Zurück an die Arbeit!`]),
+  minute: n => pick([`Minute ${n}. Weiter!`, `Minute ${n}. Kein Gejammer!`, `Minute ${n}. Na los, Bewegung!`]),
+  emomOk: () => pick(['Sauber.', 'Na also. Atmen.', 'Geht doch.']),
+  round: n => pick([`Runde ${n}. Weiter, weiter!`, `Runde ${n}. Nicht stehen bleiben!`, `${n}. Schneller!`]),
+  half: () => pick(['Halbzeit. Jetzt zeigt sich, wer du wirklich bist.', 'Halbzeit. Schweiß ist nur Schwäche, die den Körper verlässt.']),
+  lastMin: () => 'Noch eine Minute! Gib alles! Schlafen kannst du später!',
+  record: () => pick(['Du bist auf Rekordkurs. Wehe, du lässt jetzt nach!', 'Rekordkurs! Bloß nicht schlappmachen!']),
+  done: () => pick(['Fertig. Das war ordentlich. Jetzt darfst du umfallen.', 'Geschafft. Nicht schlecht. Morgen wieder.', 'Vorbei. Du lebst noch? Dann war es zu leicht.'])
+};
+function talk(key, ...a){ const f = (settings.coach ? COACH : NORMAL)[key]; if(f) say(f(...a)); }
+function liveGood(r, text){ set('live', text, 'live good'); if(!r.recSaid){ r.recSaid = 1; talk('record'); } }
 let wakeLock = null;
 async function awake(on){
   try{
@@ -366,7 +421,7 @@ function startRun(){
   if(w.id === 'barbara'){ r.round = 1; r.done = [0,0,0,0]; r.splits = []; r.cum = []; r.roundStart = r.startAt; }
   if(w.id === 'chelsea'){ r.min = 0; r.res = Array(30).fill(null); r.done = [0,0,0]; r.strict = settings.strict; }
   if(w.id === 'cindy'){ r.times = []; r.endAt = r.startAt + 20*60e3; }
-  S.run = r; say(`${w.name}. Mach dich bereit.`); awake(true); persist(); render();
+  S.run = r; talk("ready", w.name); awake(true); persist(); render();
 }
 function finish(r){
   const now = Date.now(), w = W[r.id];
@@ -374,7 +429,7 @@ function finish(r){
   if(w.type === 'fortime') r.score = Math.round((now - r.startAt)/1000);
   if(r.id === 'chelsea') r.score = r.res.filter(x => x === 'ok').length;
   if(r.id === 'cindy'){ r.score = r.times.length; r.reps = 0; }
-  awake(false); beep(1046, .7, .35); say('Geschafft! Stark gemacht.'); persist(); render();
+  awake(false); beep(1046, .7, .35); talk("done"); persist(); render();
 }
 function runHead(w, r){
   return `<div class="runhead"><button class="iconbtn" data-act="abort" aria-label="Abbrechen">✕</button>
@@ -412,7 +467,7 @@ const RUN = {
       const rec = recFor(r), done = 400 - r.left.reduce((a,b) => a+b, 0);
       if(rec && done > 0 && t > 15000){
         const ahead = done * rec.score / 400 - t/1000;
-        if(ahead >= 3) return set('live', `🔥 ${fmt(ahead)} vor deinem Rekord – weiter so!`, 'live good');
+        if(ahead >= 3) return liveGood(r, `🔥 ${fmt(ahead)} vor deinem Rekord – weiter so!`);
       }
       set('live', rec ? `Rekord: ${fmt(rec.score)}` : '', 'live');
     },
@@ -442,6 +497,7 @@ const RUN = {
     step(r, now){
       if(r.phase !== 'rest') return;
       countBeep(r, 'rest' + r.round, r.restEnd - now);
+      if(r.restEnd - now <= 10000 && r.r10 !== r.round){ r.r10 = r.round; talk("restEnd"); }
       if(now >= r.restEnd) barbNext(r, r.restEnd);
     }
   },
@@ -463,8 +519,8 @@ const RUN = {
       set('tm', down(left), 'bigtime' + (left < 10000 && r.res[r.min] !== 'ok' ? ' urgent' : ''));
       set('et', up(el));
       const ok = r.res.filter(x => x === 'ok').length, rec = recFor(r);
-      if(rec && ok > rec.score) set('live', `🔥 Neuer Rekord! Schon ${ok} Runden`, 'live good');
-      else if(rec && !r.res.includes('miss') && r.min >= 5) set('live', `🔥 Noch fehlerfrei – Rekord: ${rec.score} Runden`, 'live good');
+      if(rec && ok > rec.score) liveGood(r, `🔥 Neuer Rekord! Schon ${ok} Runden`);
+      else if(rec && !r.res.includes('miss') && r.min >= 5) liveGood(r, `🔥 Noch fehlerfrei – Rekord: ${rec.score} Runden`);
       else set('live', rec ? `Rekord: ${rec.score} Runden` : '', 'live');
     },
     step(r, now){
@@ -476,7 +532,7 @@ const RUN = {
         r.min++; r.done = [0,0,0];
         if(r.min >= 30) return finish(r);
       }
-      beep(1046, .35, .35); say(`Minute ${r.min + 1}`); persist(); render();
+      beep(1046, .35, .35); talk("minute", r.min + 1); persist(); render();
     }
   },
   cindy: {
@@ -504,13 +560,13 @@ const RUN = {
       const avg = (last - r.startAt) / n, total = n + Math.max(0, r.endAt - last) / avg;
       const totReps = Math.round(total * 30), pr = Math.floor(totReps / 30), prReps = totReps % 30;
       set('avg', up(avg)); set('prog', `≈ ${pr}${prReps ? ' + ' + prReps : ''}`);
-      if(rec && n >= 2 && pr*1000 + prReps > rec.score*1000 + (rec.reps||0)) set('live', `🔥 Auf Kurs für neuen Rekord (bisher ${scoreText(rec)})`, 'live good');
+      if(rec && n >= 2 && pr*1000 + prReps > rec.score*1000 + (rec.reps||0)) liveGood(r, `🔥 Auf Kurs für neuen Rekord (bisher ${scoreText(rec)})`);
       else set('live', rec ? `Rekord: ${scoreText(rec)}` : '', 'live');
     },
     step(r, now){
       const left = r.endAt - now;
-      if(left <= 10*60e3 && !r.half){ r.half = 1; say('Halbzeit!'); }
-      if(left <= 60e3 && !r.last){ r.last = 1; say('Noch eine Minute. Alles geben!'); }
+      if(left <= 10*60e3 && !r.half){ r.half = 1; talk("half"); }
+      if(left <= 60e3 && !r.last){ r.last = 1; talk("lastMin"); }
       countBeep(r, 'end', left);
       if(left <= 0) finish(r);
     }
@@ -519,7 +575,7 @@ const RUN = {
 
 function barbNext(r, at){
   r.round++; r.done = [0,0,0,0]; r.roundStart = at; r.phase = 'work';
-  beep(1046, .4, .35); say(`Runde ${r.round}. Los!`); persist(); render();
+  beep(1046, .4, .35); talk("roundGo", r.round); persist(); render();
 }
 
 function runView(){
@@ -534,10 +590,10 @@ function tick(){
   const now = Date.now();
   if(r.phase === 'countdown'){
     const left = Math.ceil((r.startAt - now) / 1000);
-    if(left <= 0){ r.phase = 'work'; beep(1046, .5, .4); say('Los!'); persist(); render(); return; }
+    if(left <= 0){ r.phase = 'work'; beep(1046, .5, .4); talk("go"); persist(); render(); return; }
     if(left !== r.cd){
       r.cd = left; set('cdn', left);
-      if(left === 3){ set('cdt', 'Gib dein Bestes!'); say('Gib dein Bestes!'); }
+      if(left === 3){ set('cdt', 'Gib dein Bestes!'); talk("three"); }
       beep(left <= 3 ? 880 : 660, .12, left <= 3 ? .35 : .2);
     }
     return;
@@ -557,7 +613,7 @@ function doneView(r, w){
   if(r.id === 'chelsea') extra = `<div class="muted">von 30 Runden</div><div class="dots">${r.res.map((x,i) => `<div class="dot ${x||''}">${i+1}</div>`).join('')}</div>`;
   if(r.id === 'cindy') extra = `<div class="card" style="text-align:left;margin-top:12px"><b>Angefangene letzte Runde?</b><div class="muted" style="margin-bottom:10px">Wie viele Wiederholungen hast du noch geschafft?</div>
     <div class="chips">${[[0,'Keine'],[5,'5 · Pull-ups fertig'],[15,'15 · + Push-ups fertig']].map(([n,l]) => `<button class="chip ${r.reps===n?'on':''}" data-act="cindyExtra" data-n="${n}">${l}</button>`).join('')}</div>
-    <form class="writein" data-form="cindyExtra"><input id="cxIn" type="text" inputmode="numeric" placeholder="andere Zahl (0–29)"><button class="btn" type="submit">Übernehmen</button></form></div>`;
+    <form class="writein" data-form="cindyExtra"><input id="cxIn" type="text" inputmode="numeric" placeholder="0–29"><button class="btn" type="submit">Übernehmen</button></form></div>`;
   return `<div class="result">
     <div style="font-size:44px">${isRec ? '🏆' : '💪'}</div>
     <h1>${isRec ? (rec ? 'Neuer Rekord!' : 'Erstes Ergebnis!') : 'Geschafft!'}</h1>
@@ -686,6 +742,15 @@ function moreView(){
     <label class="toggle"><input type="checkbox" id="setVoice" ${settings.voice?'checked':''}><span><b>Ansagen</b><br><span class="muted">Sprachansagen wie „Gib dein Bestes!“</span></span></label>
     <div class="muted" style="font-size:14px">Tipp: Ist der Stummschalter am iPhone an, sind die Töne aus.</div>
   </div>
+  <h3>Ansagen-Stil</h3>
+  <div class="card form">
+    <div class="seg" style="justify-self:start"><button class="${settings.coach?'':'on'}" data-act="coach" data-v="0">Normal</button><button class="${settings.coach?'on':''}" data-act="coach" data-v="1">💪 Coach</button></div>
+    <div class="muted" style="font-size:14px">${settings.coach ? 'Harte Trainerin mit derben Sprüchen. Nimmt automatisch eine Frauenstimme.' : 'Freundliche, kurze Ansagen.'}</div>
+    <label>Stimme<select id="setVoiceName"><option value="">Automatisch${settings.coach ? ' (Frauenstimme)' : ''}</option>
+      ${voices.map(v => `<option value="${esc(v.name)}" ${settings.voiceName === v.name ? 'selected' : ''}>${esc(v.name)}${FEMALE.test(v.name) ? ' ♀' : ''}</option>`).join('')}</select></label>
+    <button class="btn" data-act="voiceTest">▶ Probehören</button>
+    <div class="muted" style="font-size:14px">Schönere Stimmen kannst du auf dem iPad/iPhone laden: Einstellungen → Bedienungshilfen → Gesprochene Inhalte → Stimmen → Deutsch (z. B. „Anna (Erweitert)“).</div>
+  </div>
   <h3>Daten sichern</h3>
   <div class="card">
     <p style="margin-top:0">${results.length} Ergebnisse gespeichert. Mit „Sichern“ bekommst du eine Datei, die du z. B. in iCloud Drive ablegst. Mit „Laden“ holst du sie auf ein anderes Gerät.</p>
@@ -730,7 +795,7 @@ const ACT = {
       r.msg = rc ? (rc > r.cum[k] ? `🔥 Runde ${r.round}: ${fmt(rc - r.cum[k])} schneller als beim Rekord` : `Rekord nach Runde ${r.round}: ${fmt(rc)}`) : '';
       if(r.round === 5) return finish(r);
       r.phase = 'rest'; r.restEnd = now + 180e3;
-      beep(1046, .3); say(`Runde ${r.round} geschafft. Drei Minuten Pause.`);
+      beep(1046, .3); talk("roundDone", r.round);
     } else beep(740, .08, .2);
     persist(); render();
     if(r.msg) set('live', r.msg, 'live' + (r.msg.startsWith('🔥') ? ' good' : ''));
@@ -741,12 +806,12 @@ const ACT = {
     r.done[d.i] = r.done[d.i] ? 0 : 1;
     const was = r.res[r.min] === 'ok';
     r.res[r.min] = r.done.every(Boolean) ? 'ok' : null;
-    if(!was && r.res[r.min] === 'ok'){ beep(1046, .25); say('Geschafft!'); } else beep(740, .08, .2);
+    if(!was && r.res[r.min] === 'ok'){ beep(1046, .25); talk("emomOk"); } else beep(740, .08, .2);
     persist(); render();
   },
   cindyRound: () => {
     const r = S.run; if(r.phase !== 'work') return;
-    r.times.push(Date.now()); beep(1046, .2); say(`Runde ${r.times.length}`); persist(); render();
+    r.times.push(Date.now()); beep(1046, .2); talk("round", r.times.length); persist(); render();
   },
   cindyUndo: () => { S.run.times.pop(); persist(); render(); },
   cindyExtra: d => { S.run.reps = Math.min(29, +d.n); persist(); render(); },
@@ -784,6 +849,12 @@ const ACT = {
     const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = fname; document.body.appendChild(a); a.click(); a.remove();
   },
   import: () => $('#impFile').click(),
+  coach: d => { settings.coach = d.v === '1'; saveSettings(); render(); },
+  voiceTest: () => {
+    if(settings.mute || !settings.voice) return toast('Ansagen sind ausgeschaltet');
+    if(!window.speechSynthesis) return toast('Dieses Gerät kann keine Ansagen');
+    talk('ready', 'Cindy'); talk('three');
+  },
   padOpen: () => { S.padOpen = true; padVal = ''; render(); },
   padClose: () => { S.padOpen = false; padVal = ''; render(); },
   padKey: d => {
@@ -798,11 +869,12 @@ function angieSub(n){
   const r = S.run; if(!r || r.phase !== 'work' || !n) return;
   n = Math.min(n, r.left[r.active]); if(n <= 0) return;
   r.left[r.active] -= n; r.hist.push([r.active, n]);
+  if(!r.half && r.left.reduce((x, y) => x + y, 0) <= 200 && r.left.some(x => x > 0)){ r.half = 1; talk("angieHalf"); }
   if(r.left[r.active] === 0){
     const nx = r.left.findIndex(x => x > 0);
     if(nx < 0) return finish(r);
     const w = W.angie, from = exName(w.ex[r.active][0], r.variant), to = exName(w.ex[nx][0], r.variant);
-    r.active = nx; beep(1046, .3); say(`${from} fertig. Weiter mit ${to}.`);
+    r.active = nx; beep(1046, .3); talk("next", from, to);
   } else beep(740, .06, .2);
   persist(); render();
 }
@@ -821,6 +893,7 @@ document.addEventListener('change', e => {
   if(t.id === 'setName'){ settings.name = t.value.trim(); saveSettings(); }
   if(t.id === 'setSound'){ settings.sound = t.checked; saveSettings(); if(t.checked){ unlockAudio(); beep(); } }
   if(t.id === 'setVoice'){ settings.voice = t.checked; saveSettings(); if(t.checked) say('Ansagen sind an.'); }
+  if(t.id === 'setVoiceName'){ settings.voiceName = t.value; saveSettings(); }
   if(t.id === 'setStrict'){ settings.strict = t.checked; saveSettings(); }
   if(t.id === 'aWod'){ const ty = W[t.value].type; document.querySelectorAll('[data-t]').forEach(x => x.hidden = x.dataset.t !== ty); }
   if(t.id === 'impFile' && t.files[0]){
